@@ -62,7 +62,7 @@ public class LoginActivity extends AppCompatActivity {
                 String token = manualTokenEditText.getText().toString().trim();
                 if (!token.isEmpty()) {
                     Toast.makeText(LoginActivity.this, "Token manual: " + token, Toast.LENGTH_SHORT).show();
-                    Intent mainIntent = new Intent(LoginActivity.this, MainPlayerActivity.class);
+                    Intent mainIntent = new Intent(LoginActivity.this, MainActivity.class);
                     mainIntent.putExtra("access_token", token);
                     startActivity(mainIntent);
                     finish();
@@ -94,7 +94,7 @@ public class LoginActivity extends AppCompatActivity {
             if (uri.getScheme() != null && uri.getScheme().equals("tuapp") && "callback".equals(uri.getHost())) {
                 String accessToken = uri.getQueryParameter("access_token");
                 if (accessToken != null && !accessToken.isEmpty()) {
-                    Intent mainIntent = new Intent(LoginActivity.this, MainPlayerActivity.class);
+                    Intent mainIntent = new Intent(LoginActivity.this, MainActivity.class);
                     mainIntent.putExtra("access_token", accessToken);
                     startActivity(mainIntent);
                     finish();
@@ -143,7 +143,7 @@ public class LoginActivity extends AppCompatActivity {
                 JSONObject json = new JSONObject(sb.toString());
                 String accessToken = json.getString("access_token");
                 runOnUiThread(() -> {
-                    Intent mainIntent = new Intent(LoginActivity.this, MainPlayerActivity.class);
+                    Intent mainIntent = new Intent(LoginActivity.this, MainActivity.class);
                     mainIntent.putExtra("access_token", accessToken);
                     startActivity(mainIntent);
                     finish();
