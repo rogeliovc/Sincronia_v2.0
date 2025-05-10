@@ -30,7 +30,7 @@ public class MainShellFragment extends Fragment {
             setTabActive(tabMusic, true);
             setTabActive(tabHome, false);
             setTabActive(tabCalendar, false);
-            showInnerFragment(new PlayerFragment());
+            showInnerFragment(new MusicFragment());
         });
         tabHome.setOnClickListener(v -> {
             setTabActive(tabMusic, false);

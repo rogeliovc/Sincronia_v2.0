@@ -36,6 +36,13 @@ dependencies {
     // Spotify Android Auth SDK
     implementation("com.spotify.android:auth:1.2.6")
 
+    // Glide para carga de imágenes
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
+
+    // Spotify App Remote para reproducción
+
+
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)

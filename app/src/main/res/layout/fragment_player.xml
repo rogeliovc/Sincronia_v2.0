@@ -1,20 +1,150 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:background="#222"
-    android:padding="16dp">
+    android:layout_height="match_parent"
+    android:background="#222">
 
+    <!-- Handle para swipe up/down -->
+    <View
+        android:id="@+id/handleBar"
+        android:layout_width="40dp"
+        android:layout_height="5dp"
+        android:background="@drawable/tab_selector_bg"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp" />
+
+    <!-- Botón cerrar -->
+    <ImageButton
+        android:id="@+id/btnClosePlayer"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@android:color/transparent"
+        android:src="@android:drawable/ic_menu_close_clear_cancel"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="8dp" />
+
+    <!-- Portada grande -->
+    <ImageView
+        android:id="@+id/player_album_art"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="centerCrop"
+        android:background="#333"
+        app:layout_constraintTop_toBottomOf="@id/handleBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintWidth_percent="0.7"
+        app:layout_constraintHeight_percent="0.45"/>
+
+    <!-- Título -->
     <TextView
-        android:id="@+id/player_title"
-        android:layout_width="wrap_content"
+        android:id="@+id/player_song_title"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Reproductor"
+        android:text="Título de la canción"
         android:textColor="#fff"
         android:textStyle="bold"
-        android:textSize="18sp" />
+        android:textSize="20sp"
+        android:maxLines="2"
+        app:layout_constraintTop_toBottomOf="@id/player_album_art"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:gravity="center"
+        android:layout_marginTop="16dp"/>
 
-    <!-- Aquí puedes agregar controles de reproducción, barra de progreso, etc. -->
+    <!-- Artista -->
+    <TextView
+        android:id="@+id/player_song_artist"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Artista"
+        android:textColor="#bbb"
+        android:textSize="16sp"
+        android:maxLines="1"
+        app:layout_constraintTop_toBottomOf="@id/player_song_title"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:gravity="center"
+        android:layout_marginTop="4dp"/>
 
-</LinearLayout>
+    <!-- Barra de progreso -->
+    <SeekBar
+        android:id="@+id/player_seekbar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@id/player_song_artist"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"/>
+
+    <!-- Tiempos -->
+    <TextView
+        android:id="@+id/player_current_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0:00"
+        android:textColor="#bbb"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/player_seekbar"
+        app:layout_constraintStart_toStartOf="@id/player_seekbar"
+        android:layout_marginTop="2dp"/>
+
+    <TextView
+        android:id="@+id/player_total_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="3:45"
+        android:textColor="#bbb"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/player_seekbar"
+        app:layout_constraintEnd_toEndOf="@id/player_seekbar"
+        android:layout_marginTop="2dp"/>
+
+    <!-- Controles -->
+    <LinearLayout
+        android:id="@+id/player_controls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/player_total_time"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp">
+
+        <ImageButton
+            android:id="@+id/player_btn_prev"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_media_previous"
+            android:background="@android:color/transparent"
+            android:tint="#fff"/>
+
+        <ImageButton
+            android:id="@+id/player_btn_play_pause"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:src="@android:drawable/ic_media_play"
+            android:background="@android:color/transparent"
+            android:tint="#fff"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"/>
+
+        <ImageButton
+            android:id="@+id/player_btn_next"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_media_next"
+            android:background="@android:color/transparent"
+            android:tint="#fff"/>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+
