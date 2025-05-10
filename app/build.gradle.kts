@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+
 android {
     namespace = "com.example.sincronia"
     compileSdk = 35
@@ -32,6 +33,8 @@ android {
 }
 
 dependencies {
+    // Spotify Android Auth SDK
+    implementation("com.spotify.android:auth:1.2.6")
 
     implementation(libs.appcompat)
     implementation(libs.material)
