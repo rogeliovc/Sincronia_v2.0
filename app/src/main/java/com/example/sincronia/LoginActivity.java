@@ -5,6 +5,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 import android.widget.EditText;
 import androidx.appcompat.app.AppCompatActivity;
@@ -23,9 +24,11 @@ import org.json.JSONObject;
 public class LoginActivity extends AppCompatActivity {
     // Reemplaza estos valores por los de tu app registrada en Spotify
     private static final String CLIENT_ID = "4caddaabcd134c6da47d4f7d1c7877ba";
-    private static final String REDIRECT_URI = "https://spotify-callback.vercel.app/api/callback";
+    private static final String REDIRECT_URI = "sincronia://callback";
     private static final String SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative streaming user-top-read user-read-recently-played user-read-email";
     private String codeVerifier;
+    private ProgressBar progressBar;
+    private Button loginButton;
 
     private static final int SPOTIFY_LOGIN_REQUEST_CODE = 1337;
 
@@ -33,15 +36,31 @@ public class LoginActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-        Button loginButton = findViewById(R.id.login_button);
-        Button manualTokenButton = findViewById(R.id.manual_token_button);
-        EditText manualTokenEditText = findViewById(R.id.manual_token_input);
 
+        // Paso 2: Redirige automáticamente al Home si ya hay un access_token válido
+        AuthManager authManager = new AuthManager(this);
+        String accessToken = authManager.getAccessToken();
+        if (accessToken != null && !accessToken.isEmpty() && authManager.isTokenValid()) {
+            Intent mainIntent = new Intent(LoginActivity.this, MainActivity.class);
+            startActivity(mainIntent);
+            finish();
+            return;
+        }
+        loginButton = findViewById(R.id.login_button);
+progressBar = findViewById(R.id.login_progress);
+progressBar.setVisibility(View.GONE);
         loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                loginButton.setEnabled(false);
+                progressBar.setVisibility(View.VISIBLE);
                 // Generar code_verifier y code_challenge (PKCE)
                 codeVerifier = generateCodeVerifier();
+                // Guardar code_verifier en SharedPreferences
+                getSharedPreferences("auth", MODE_PRIVATE)
+                    .edit()
+                    .putString("code_verifier", codeVerifier)
+                    .apply();
                 String codeChallenge = generateCodeChallenge(codeVerifier);
                 // Armar URL de autorización
                 String url = "https://accounts.spotify.com/authorize" +
@@ -56,21 +75,7 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
-        manualTokenButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String token = manualTokenEditText.getText().toString().trim();
-                if (!token.isEmpty()) {
-                    Toast.makeText(LoginActivity.this, "Token manual: " + token, Toast.LENGTH_SHORT).show();
-                    Intent mainIntent = new Intent(LoginActivity.this, MainActivity.class);
-                    mainIntent.putExtra("access_token", token);
-                    startActivity(mainIntent);
-                    finish();
-                } else {
-                    Toast.makeText(LoginActivity.this, "Por favor ingresa un access_token válido", Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
+        
     }
 
     @Override
@@ -107,8 +112,14 @@ public class LoginActivity extends AppCompatActivity {
             if (uri.toString().startsWith(REDIRECT_URI)) {
                 String code = uri.getQueryParameter("code");
                 if (code != null) {
-                    // Intercambiar el código por un access_token
-                    exchangeCodeForToken(code, codeVerifier);
+                    // Recuperar el code_verifier de SharedPreferences
+                    String codeVerifierFromPrefs = getSharedPreferences("auth", MODE_PRIVATE)
+                        .getString("code_verifier", null);
+                    if (codeVerifierFromPrefs != null) {
+                        exchangeCodeForToken(code, codeVerifierFromPrefs);
+                    } else {
+                        Toast.makeText(this, "No se pudo recuperar code_verifier", Toast.LENGTH_LONG).show();
+                    }
                 } else {
                     Toast.makeText(this, "No se recibió código de autorización", Toast.LENGTH_LONG).show();
                 }
@@ -132,6 +143,24 @@ public class LoginActivity extends AppCompatActivity {
                 os.write(params.getBytes());
                 os.flush();
                 os.close();
+                if (conn.getResponseCode() != 200) {
+                    int httpCode = conn.getResponseCode();
+                    InputStream err = conn.getErrorStream();
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(err));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                    reader.close();
+                    String errorMsg = sb.toString();
+                    String logMsg = "HTTP " + httpCode + ": " + errorMsg;
+android.util.Log.e("SpotifyAuth", logMsg);
+runOnUiThread(() -> {
+    progressBar.setVisibility(View.GONE);
+    loginButton.setEnabled(true);
+    Toast.makeText(LoginActivity.this, logMsg, Toast.LENGTH_LONG).show();
+});
+                    return;
+                }
                 InputStream is = conn.getInputStream();
                 BufferedReader reader = new BufferedReader(new InputStreamReader(is));
                 StringBuilder sb = new StringBuilder();
@@ -143,13 +172,31 @@ public class LoginActivity extends AppCompatActivity {
                 JSONObject json = new JSONObject(sb.toString());
                 String accessToken = json.getString("access_token");
                 runOnUiThread(() -> {
-                    Intent mainIntent = new Intent(LoginActivity.this, MainActivity.class);
-                    mainIntent.putExtra("access_token", accessToken);
-                    startActivity(mainIntent);
-                    finish();
-                });
+                        try {
+                            AuthManager authManager = new AuthManager(LoginActivity.this);
+                            String refreshToken = json.has("refresh_token") ? json.getString("refresh_token") : "";
+                            long expiresIn = json.has("expires_in") ? json.getLong("expires_in") : 3600;
+                            // Mostrar los valores recibidos
+                            android.widget.Toast.makeText(LoginActivity.this, "access_token: " + accessToken.substring(0, 8) + "...\nrefresh_token: " + (refreshToken.isEmpty() ? "VACIO" : refreshToken.substring(0, 8) + "...") + "\nexpires_in: " + expiresIn, android.widget.Toast.LENGTH_LONG).show();
+                            authManager.saveTokens(accessToken, refreshToken, expiresIn);
+                        } catch (org.json.JSONException e) {
+                            e.printStackTrace();
+                            android.widget.Toast.makeText(LoginActivity.this, "JSONException: " + e.getMessage(), android.widget.Toast.LENGTH_LONG).show();
+                        }
+                        progressBar.setVisibility(View.GONE);
+                        loginButton.setEnabled(true);
+                        Intent mainIntent = new Intent(LoginActivity.this, MainActivity.class);
+                        startActivity(mainIntent);
+                        finish();
+                    });
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(LoginActivity.this, "Error autenticando: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                e.printStackTrace();
+                android.util.Log.e("SpotifyAuth", "Error autenticando: " + e.getMessage(), e);
+runOnUiThread(() -> {
+    progressBar.setVisibility(View.GONE);
+    loginButton.setEnabled(true);
+    Toast.makeText(LoginActivity.this, "Error autenticando: " + e.getMessage(), Toast.LENGTH_LONG).show();
+});
             }
         }).start();
     }

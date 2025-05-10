@@ -30,7 +30,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="tuapp" android:host="callback" />
+                <data android:scheme="sincronia" android:host="callback" />
             </intent-filter>
         </activity>
         <activity

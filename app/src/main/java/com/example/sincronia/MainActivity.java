@@ -17,6 +17,19 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Verificación de sesión
+        AuthManager authManager = new AuthManager(this);
+        boolean valid = authManager.isTokenValid();
+        if (!valid) {
+            boolean refreshed = authManager.refreshAccessToken();
+            if (!refreshed || !authManager.isTokenValid()) {
+                // Redirigir a LoginActivity
+                startActivity(new android.content.Intent(this, LoginActivity.class));
+                finish();
+                return;
+            }
+        }
+
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
