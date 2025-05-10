@@ -7,7 +7,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.Toast;
-import android.widget.EditText;
 import androidx.appcompat.app.AppCompatActivity;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -22,7 +21,7 @@ import java.net.URL;
 import org.json.JSONObject;
 
 public class LoginActivity extends AppCompatActivity {
-    // Reemplaza estos valores por los de tu app registrada en Spotify
+    // LoginActivity: solo flujo OAuth nativo con Spotify
     private static final String CLIENT_ID = "4caddaabcd134c6da47d4f7d1c7877ba";
     private static final String REDIRECT_URI = "sincronia://callback";
     private static final String SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative streaming user-top-read user-read-recently-played user-read-email";
@@ -30,6 +29,7 @@ public class LoginActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private Button loginButton;
 
+    // Ya no se permite intercambio manual, solo OAuth
     private static final int SPOTIFY_LOGIN_REQUEST_CODE = 1337;
 
     @Override

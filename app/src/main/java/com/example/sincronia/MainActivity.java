@@ -39,15 +39,10 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
         // Configurar Toolbar
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("Sincronía");
-        }
 
-        // Mostrar fragmento por defecto (Home)
+        // Mostrar fragmento raíz (MainShellFragment)
         if (savedInstanceState == null) {
-            showMainFragment(new HomeFragment());
+            showMainFragment(new MainShellFragment());
         }
 
         // Mostrar MiniPlayer siempre
@@ -55,14 +50,7 @@ public class MainActivity extends AppCompatActivity {
             .replace(R.id.mini_player_container, new MiniPlayerFragment())
             .commit();
 
-        // Configurar navegación de tabs
-        ImageButton tabPlayer = findViewById(R.id.tab_player);
-        ImageButton tabHome = findViewById(R.id.tab_home);
-        ImageButton tabTasks = findViewById(R.id.tab_tasks);
 
-        tabPlayer.setOnClickListener(v -> showMainFragment(new PlayerFragment()));
-        tabHome.setOnClickListener(v -> showMainFragment(new HomeFragment()));
-        tabTasks.setOnClickListener(v -> showMainFragment(new TasksFragment()));
     }
 
     private void showMainFragment(Fragment fragment) {
