@@ -19,6 +19,25 @@ public class AuthManager {
     private static final String KEY_TOKEN_EXPIRY = "token_expiry";
     private SharedPreferences prefs;
 
+    // --- Singleton para acceso global ---
+    private static AuthManager instance;
+    private static Context appContext;
+    public static void init(Context context) {
+        appContext = context.getApplicationContext();
+        instance = new AuthManager(appContext);
+    }
+    public static AuthManager getInstance() {
+        if (instance == null && appContext != null) {
+            instance = new AuthManager(appContext);
+        }
+        return instance;
+    }
+    // Método estático para obtener el accessToken global
+    public static String getGlobalAccessToken() {
+        AuthManager mgr = getInstance();
+        return mgr != null ? mgr.getAccessToken() : null;
+    }
+
     public AuthManager(Context context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }

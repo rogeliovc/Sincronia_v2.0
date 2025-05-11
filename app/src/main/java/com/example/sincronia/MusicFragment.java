@@ -25,12 +25,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MusicFragment extends Fragment {
+    // --- Spotify App Remote ---
+    private static final String CLIENT_ID = "4caddaabcd134c6da47d4f7d1c7877ba"; // Reemplaza con tu Client ID
+    private static final String REDIRECT_URI = "sincronia://callback"; // Reemplaza con tu Redirect URI
+    private com.spotify.android.appremote.api.SpotifyAppRemote mSpotifyAppRemote;
+
     private RecyclerView rvPlaylists, rvFavorites, rvRecent;
     private PlaylistAdapter playlistAdapter;
     private SongAdapter favoritesAdapter, recentAdapter;
     private List<Playlist> playlistList;
     private List<Song> favoritesList, recentList;
-    private int currentSongIndex = 0;
+    private MusicPlayerViewModel musicPlayerViewModel;
 
     private View progressBar;
     private TextView tvPlaylistsEmpty, tvFavoritesEmpty, tvRecentEmpty;
@@ -47,12 +52,117 @@ public class MusicFragment extends Fragment {
     private boolean isPlaying = false;
     private String lastPlayedUri = null; // Para saber qué canción reanudar
 
+    // Conexión de botones a los métodos del SDK de Spotify
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+    loadSpotifyData();
+        super.onViewCreated(view, savedInstanceState);
+        btnPlayPause = view.findViewById(R.id.btnPlayPause);
+        btnNext = view.findViewById(R.id.btnNext);
+        btnPrev = view.findViewById(R.id.btnPrev);
+
+        btnPlayPause.setOnClickListener(v -> {
+            // Puedes alternar entre play/pause según el estado actual
+            if (isPlaying) {
+                pauseSpotify();
+                isPlaying = false;
+            } else {
+                // Si tienes el URI actual, úsalo aquí
+                Song currentSong = musicPlayerViewModel.getCurrentSong().getValue();
+                if (currentSong != null && currentSong.getUri() != null) {
+                    playSpotifyUri(currentSong.getUri());
+                    isPlaying = true;
+                } else {
+                    Toast.makeText(requireContext(), "No hay canción seleccionada", Toast.LENGTH_SHORT).show();
+                }
+            }
+            updatePlayPauseIcon();
+        });
+
+        btnNext.setOnClickListener(v -> {
+            nextSpotify();
+            musicPlayerViewModel.next(); // Opcional: sincroniza UI local
+        });
+
+        btnPrev.setOnClickListener(v -> {
+            previousSpotify();
+            musicPlayerViewModel.previous(); // Opcional: sincroniza UI local
+        });
+        // Puedes conectar más controles aquí si lo deseas
+    }
+    // Fin de conexión de botones
+
+
     public MusicFragment() {
         // Required empty public constructor
     }
 
-    @Nullable
     @Override
+    public void onStart() {
+        super.onStart();
+        // Chequeo de instalación de la app oficial de Spotify
+        boolean spotifyInstalled = false;
+        String spotifyVersion = "N/A";
+        try {
+            android.content.pm.PackageManager pm = requireContext().getPackageManager();
+            android.content.pm.PackageInfo info = pm.getPackageInfo("com.spotify.music", 0);
+            spotifyInstalled = true;
+            spotifyVersion = info.versionName;
+        } catch (Exception e) {
+            spotifyInstalled = false;
+        }
+        android.util.Log.d("SpotifyRemote", "¿Spotify instalada?: " + spotifyInstalled + ", versión: " + spotifyVersion);
+        // Log antes de conectar
+        android.util.Log.d("SpotifyRemote", "Intentando conectar con App Remote. CLIENT_ID: " + CLIENT_ID + ", REDIRECT_URI: " + REDIRECT_URI);
+        com.spotify.android.appremote.api.ConnectionParams connectionParams =
+            new com.spotify.android.appremote.api.ConnectionParams.Builder(CLIENT_ID)
+                .setRedirectUri(REDIRECT_URI)
+                .showAuthView(true)
+                .build();
+        android.util.Log.d("SpotifyRemote", "Llamando a SpotifyAppRemote.connect...");
+        com.spotify.android.appremote.api.SpotifyAppRemote.connect(requireContext(), connectionParams,
+            new com.spotify.android.appremote.api.Connector.ConnectionListener() {
+                @Override
+                public void onConnected(com.spotify.android.appremote.api.SpotifyAppRemote spotifyAppRemote) {
+                    mSpotifyAppRemote = spotifyAppRemote;
+                    android.util.Log.i("SpotifyRemote", "¡Conexión a Spotify App Remote exitosa!");
+                    // Puedes actualizar la UI aquí si lo deseas
+                }
+
+                @Override
+                public void onFailure(Throwable throwable) {
+                    StringBuilder msg = new StringBuilder();
+                    msg.append("No se pudo conectar a Spotify.\n\n");
+                    msg.append("1. Asegúrate de tener la app oficial de Spotify instalada y abierta.\n");
+                    msg.append("2. Inicia sesión con la misma cuenta que usaste para autorizar esta app.\n");
+                    msg.append("3. Si el problema persiste, cierra sesión y vuelve a iniciar sesión en ambas apps.\n\n");
+                    msg.append("Mensaje técnico: ");
+                    msg.append(throwable != null ? throwable.getMessage() : "error desconocido");
+                    android.widget.Toast.makeText(requireContext(), msg.toString(), android.widget.Toast.LENGTH_LONG).show();
+                    if (throwable != null) {
+                        android.util.Log.e("SpotifyRemote", msg.toString(), throwable);
+                        // Log completo del stacktrace
+                        java.io.StringWriter sw = new java.io.StringWriter();
+                        java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+                        throwable.printStackTrace(pw);
+                        android.util.Log.e("SpotifyRemote", sw.toString());
+                    } else {
+                        android.util.Log.e("SpotifyRemote", msg.toString());
+                    }
+                }
+            });
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (mSpotifyAppRemote != null) {
+            com.spotify.android.appremote.api.SpotifyAppRemote.disconnect(mSpotifyAppRemote);
+            mSpotifyAppRemote = null;
+        }
+    }
+
+    @Nullable
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_music, container, false);
         rvPlaylists = view.findViewById(R.id.rvPlaylists);
@@ -84,17 +194,26 @@ public class MusicFragment extends Fragment {
         favoritesList = new ArrayList<>();
         recentList = new ArrayList<>();
 
-        playlistAdapter = new PlaylistAdapter(getContext(), playlistList, position -> {
-            // TODO: acción al seleccionar playlist
+        playlistAdapter = new PlaylistAdapter(getContext(), playlistList, new PlaylistAdapter.OnPlaylistClickListener() {
+            @Override
+            public void onPlaylistClick(int position) {
+                Playlist selectedPlaylist = playlistList.get(position);
+                // Aquí puedes cargar las canciones de la playlist seleccionada usando la Web API
+                // Por ejemplo: mostrar un nuevo fragmento o actualizar un RecyclerView de canciones
+                // (Implementación detallada en el siguiente paso)
+                Toast.makeText(getContext(), "Seleccionaste: " + selectedPlaylist.getName(), Toast.LENGTH_SHORT).show();
+            }
         });
         rvPlaylists.setAdapter(playlistAdapter);
 
         favoritesAdapter = new SongAdapter(getContext(), favoritesList, position -> {
             android.util.Log.d("MusicFragment", "Favorito seleccionado: " + favoritesList.get(position).getTitle());
-            currentSongIndex = position;
-            updatePlayerUI();
-            // Intentar reproducir la canción favorita seleccionada
-            playSpotifyUri(favoritesList.get(position).getUri());
+            if (!favoritesList.isEmpty()) {
+                // Lógica de UI local:
+                musicPlayerViewModel.playSongFromList(new ArrayList<>(favoritesList), position);
+                // Reproducción real en Spotify:
+                playSpotifyUri(favoritesList.get(position).getUri());
+            }
         });
         rvFavorites.setAdapter(favoritesAdapter);
 
@@ -117,6 +236,32 @@ public class MusicFragment extends Fragment {
         btnNext = view.findViewById(R.id.btnNext);
         playerProgress = view.findViewById(R.id.playerProgress);
 
+        // Inicializar ViewModel
+        musicPlayerViewModel = new androidx.lifecycle.ViewModelProvider(requireActivity()).get(MusicPlayerViewModel.class);
+
+        // Observadores para actualizar la UI
+        musicPlayerViewModel.getCurrentSong().observe(getViewLifecycleOwner(), song -> {
+            if (song != null) {
+                tvSongTitle.setText(song.getTitle());
+                tvSongArtist.setText(song.getArtist());
+                if (song.getCoverUrl() != null) {
+                    Glide.with(this).load(song.getCoverUrl()).placeholder(R.drawable.icon_default_music).into(ivSongArt);
+                } else {
+                    ivSongArt.setImageResource(song.getCoverResId());
+                }
+            }
+        });
+        musicPlayerViewModel.getIsPlaying().observe(getViewLifecycleOwner(), playing -> {
+            isPlaying = playing != null && playing;
+            updatePlayPauseIcon();
+        });
+        musicPlayerViewModel.getPlaybackPosition().observe(getViewLifecycleOwner(), pos -> {
+            if (playerProgress != null && pos != null) playerProgress.setProgress(pos);
+        });
+        musicPlayerViewModel.getDuration().observe(getViewLifecycleOwner(), dur -> {
+            if (playerProgress != null && dur != null) playerProgress.setMax(dur);
+        });
+
         // Validar que todas las vistas existen
         if (ivSongArt == null) android.util.Log.e("MusicFragment", "ivSongArt es NULL");
         if (tvSongTitle == null) android.util.Log.e("MusicFragment", "tvSongTitle es NULL");
@@ -128,34 +273,26 @@ public class MusicFragment extends Fragment {
 
         if (btnPlayPause != null) {
             btnPlayPause.setOnClickListener(v -> {
-                isPlaying = !isPlaying;
-                updatePlayPauseIcon();
-                android.util.Log.d("MusicFragment", isPlaying ? "Play" : "Pause");
+                if (isPlaying) {
+                    musicPlayerViewModel.pause();
+                } else {
+                    musicPlayerViewModel.play();
+                }
             });
         }
 
         if (btnPrev != null) {
-            btnPrev.setOnClickListener(v -> {
-                if (currentSongIndex > 0) {
-                    currentSongIndex--;
-                    updatePlayerUI();
-                    android.util.Log.d("MusicFragment", "Anterior: " + favoritesList.get(currentSongIndex).getTitle());
-                }
-            });
+            btnPrev.setOnClickListener(v -> musicPlayerViewModel.previous());
         }
 
         if (btnNext != null) {
-            btnNext.setOnClickListener(v -> {
-                if (currentSongIndex < favoritesList.size() - 1) {
-                    currentSongIndex++;
-                    updatePlayerUI();
-                    android.util.Log.d("MusicFragment", "Siguiente: " + favoritesList.get(currentSongIndex).getTitle());
-                }
-            });
+            btnNext.setOnClickListener(v -> musicPlayerViewModel.next());
         }
 
         // Inicializar reproductor con la primera canción de favoritos
-        updatePlayerUI();
+        if (!favoritesList.isEmpty()) {
+            musicPlayerViewModel.playSongFromList(new ArrayList<>(favoritesList), 0);
+        }
 
         // Mostrar el reproductor visual al tocar la portada o el área del player
         View playerContainer = view.findViewById(R.id.playerContainer);
@@ -170,45 +307,36 @@ public class MusicFragment extends Fragment {
     private PlayerBottomSheetFragment playerSheet;
 
     private void showPlayerBottomSheet() {
-        if (favoritesList == null || favoritesList.isEmpty()) return;
-        Song song = favoritesList.get(currentSongIndex);
+        List<Song> songs = musicPlayerViewModel.getPlaylist().getValue();
+        Integer idx = musicPlayerViewModel.getCurrentIndex().getValue();
+        if (songs == null || songs.isEmpty() || idx == null || idx < 0 || idx >= songs.size()) return;
+        Song song = songs.get(idx);
         if (playerSheet == null) playerSheet = new PlayerBottomSheetFragment();
         playerSheet.setOnPlayerActionListener(new PlayerBottomSheetFragment.OnPlayerActionListener() {
             @Override public void onPrev() {
-                if (currentSongIndex > 0) {
-                    currentSongIndex--;
-                    updatePlayerUI();
-                    playSpotifyUri(favoritesList.get(currentSongIndex).getUri());
-                    playerSheet.updateSong(
-                        favoritesList.get(currentSongIndex).getTitle(),
-                        favoritesList.get(currentSongIndex).getArtist(),
-                        favoritesList.get(currentSongIndex).getCoverUrl(),
-                        parseDurationMs(favoritesList.get(currentSongIndex).getDuration())
-                    );
+                musicPlayerViewModel.previous();
+                // Actualiza UI del sheet
+                Integer newIdx = musicPlayerViewModel.getCurrentIndex().getValue();
+                if (newIdx != null && newIdx >= 0 && newIdx < songs.size()) {
+                    Song newSong = songs.get(newIdx);
+                    playerSheet.updateSong(newSong.getTitle(), newSong.getArtist(), newSong.getCoverUrl(), parseDurationMs(newSong.getDuration()));
                 }
             }
             @Override public void onPlayPause() {
                 if (isPlaying) {
-                    pauseSpotifyWithCallback(success -> {
-                        if (playerSheet != null) playerSheet.setPlaying(!success);
-                    });
+                    musicPlayerViewModel.pause();
+                    playerSheet.setPlaying(false);
                 } else {
-                    resumeSpotifyWithCallback(success -> {
-                        if (playerSheet != null) playerSheet.setPlaying(success);
-                    });
+                    musicPlayerViewModel.play();
+                    playerSheet.setPlaying(true);
                 }
             }
             @Override public void onNext() {
-                if (currentSongIndex < favoritesList.size() - 1) {
-                    currentSongIndex++;
-                    updatePlayerUI();
-                    playSpotifyUri(favoritesList.get(currentSongIndex).getUri());
-                    playerSheet.updateSong(
-                        favoritesList.get(currentSongIndex).getTitle(),
-                        favoritesList.get(currentSongIndex).getArtist(),
-                        favoritesList.get(currentSongIndex).getCoverUrl(),
-                        parseDurationMs(favoritesList.get(currentSongIndex).getDuration())
-                    );
+                musicPlayerViewModel.next();
+                Integer newIdx = musicPlayerViewModel.getCurrentIndex().getValue();
+                if (newIdx != null && newIdx >= 0 && newIdx < songs.size()) {
+                    Song newSong = songs.get(newIdx);
+                    playerSheet.updateSong(newSong.getTitle(), newSong.getArtist(), newSong.getCoverUrl(), parseDurationMs(newSong.getDuration()));
                 }
             }
             @Override public void onClose() { playerSheet.dismiss(); }
@@ -232,17 +360,17 @@ public class MusicFragment extends Fragment {
     }
 
     private void updatePlayerUI() {
-        if (favoritesList == null || favoritesList.isEmpty()) return;
-        Song song = favoritesList.get(currentSongIndex);
+        Integer idx = musicPlayerViewModel.getCurrentIndex().getValue();
+        List<Song> songs = musicPlayerViewModel.getPlaylist().getValue();
+        if (songs == null || songs.isEmpty() || idx == null || idx < 0 || idx >= songs.size()) return;
+        Song song = songs.get(idx);
         tvSongTitle.setText(song.getTitle());
         tvSongArtist.setText(song.getArtist());
         if (song.getCoverUrl() != null) {
-            // Glide para portada
             Glide.with(this).load(song.getCoverUrl()).placeholder(R.drawable.icon_default_music).into(ivSongArt);
         } else {
             ivSongArt.setImageResource(song.getCoverResId());
         }
-        // Simular progreso
         playerProgress.setProgress(0);
         updatePlayPauseIcon();
     }
@@ -256,87 +384,67 @@ public class MusicFragment extends Fragment {
     }
 
     // Carga datos reales de Spotify
-    private void loadSpotifyData() {
-        if (!isAdded() || getActivity() == null) return;
-        
-
-requireActivity().runOnUiThread(() -> {
-            if (!isAdded() || getActivity() == null) return;
-            progressBar.setVisibility(View.VISIBLE);
-            rvPlaylists.setVisibility(View.GONE);
-            rvFavorites.setVisibility(View.GONE);
-            rvRecent.setVisibility(View.GONE);
-            tvPlaylistsEmpty.setVisibility(View.GONE);
-            tvFavoritesEmpty.setVisibility(View.GONE);
-            tvRecentEmpty.setVisibility(View.GONE);
-            tvError.setVisibility(View.GONE);
+private void loadSpotifyData() {
+    if (!isAdded() || getActivity() == null) return;
+    requireActivity().runOnUiThread(() -> {
+        progressBar.setVisibility(View.VISIBLE);
+        rvPlaylists.setVisibility(View.GONE);
+        rvFavorites.setVisibility(View.GONE);
+        rvRecent.setVisibility(View.GONE);
+        tvPlaylistsEmpty.setVisibility(View.GONE);
+        tvFavoritesEmpty.setVisibility(View.GONE);
+        tvRecentEmpty.setVisibility(View.GONE);
+        tvError.setVisibility(View.GONE);
+    });
+    new Thread(() -> {
+        String accessToken = AuthManager.getGlobalAccessToken();
+        if (accessToken == null) {
+            requireActivity().runOnUiThread(this::showError);
+            return;
+        }
+        List<Playlist> realPlaylists = SpotifyService.getUserPlaylists(accessToken);
+        List<Song> realFavorites = SpotifyService.getUserFavorites(accessToken);
+        List<Song> realRecent = SpotifyService.getRecentlyPlayed(accessToken);
+        requireActivity().runOnUiThread(() -> {
+            progressBar.setVisibility(View.GONE);
+            // Playlists
+            playlistList.clear();
+            if (realPlaylists != null && !realPlaylists.isEmpty()) {
+                playlistList.addAll(realPlaylists);
+                rvPlaylists.setVisibility(View.VISIBLE);
+                tvPlaylistsEmpty.setVisibility(View.GONE);
+            } else {
+                rvPlaylists.setVisibility(View.GONE);
+                tvPlaylistsEmpty.setVisibility(View.VISIBLE);
+            }
+            playlistAdapter.notifyDataSetChanged();
+            // Favoritos
+            favoritesList.clear();
+            if (realFavorites != null && !realFavorites.isEmpty()) {
+                favoritesList.addAll(realFavorites);
+                rvFavorites.setVisibility(View.VISIBLE);
+                tvFavoritesEmpty.setVisibility(View.GONE);
+            } else {
+                rvFavorites.setVisibility(View.GONE);
+                tvFavoritesEmpty.setVisibility(View.VISIBLE);
+            }
+            favoritesAdapter.notifyDataSetChanged();
+            // Recientes
+            recentList.clear();
+            if (realRecent != null && !realRecent.isEmpty()) {
+                recentList.addAll(realRecent);
+                rvRecent.setVisibility(View.VISIBLE);
+                tvRecentEmpty.setVisibility(View.GONE);
+            } else {
+                rvRecent.setVisibility(View.GONE);
+                tvRecentEmpty.setVisibility(View.VISIBLE);
+            }
+            recentAdapter.notifyDataSetChanged();
         });
-        new Thread(() -> {
-            AuthManager authManager = new AuthManager(requireContext());
-            String accessToken = authManager.getAccessToken();
-            if (accessToken == null) {
-                showError();
-                return;
-            }
-            List<Playlist> playlists = null;
-            List<Song> favorites = null;
-            List<Song> recent = null;
-            try {
-                playlists = SpotifyService.getUserPlaylists(accessToken);
-                favorites = SpotifyService.getUserFavorites(accessToken);
-                recent = SpotifyService.getRecentlyPlayed(accessToken);
-            } catch (Exception e) {
-                showError();
-                return;
-            }
-            List<Playlist> finalPlaylists = playlists;
-            List<Song> finalFavorites = favorites;
-            List<Song> finalRecent = recent;
-            if (!isAdded() || getActivity() == null) return;
-            
+    }).start();
+}
 
-requireActivity().runOnUiThread(() -> {
-                progressBar.setVisibility(View.GONE);
-                // Playlists
-                playlistList.clear();
-                if (finalPlaylists != null && !finalPlaylists.isEmpty()) {
-                    playlistList.addAll(finalPlaylists);
-                    rvPlaylists.setVisibility(View.VISIBLE);
-                    tvPlaylistsEmpty.setVisibility(View.GONE);
-                } else {
-                    rvPlaylists.setVisibility(View.GONE);
-                    tvPlaylistsEmpty.setVisibility(View.VISIBLE);
-                }
-                playlistAdapter.notifyDataSetChanged();
-                // Favoritos
-                favoritesList.clear();
-                if (finalFavorites != null && !finalFavorites.isEmpty()) {
-                    favoritesList.addAll(finalFavorites);
-                    rvFavorites.setVisibility(View.VISIBLE);
-                    tvFavoritesEmpty.setVisibility(View.GONE);
-                } else {
-                    rvFavorites.setVisibility(View.GONE);
-                    tvFavoritesEmpty.setVisibility(View.VISIBLE);
-                }
-                favoritesAdapter.notifyDataSetChanged();
-                // Recientes
-                recentList.clear();
-                if (finalRecent != null && !finalRecent.isEmpty()) {
-                    recentList.addAll(finalRecent);
-                    rvRecent.setVisibility(View.VISIBLE);
-                    tvRecentEmpty.setVisibility(View.GONE);
-                } else {
-                    rvRecent.setVisibility(View.GONE);
-                    tvRecentEmpty.setVisibility(View.VISIBLE);
-                }
-                recentAdapter.notifyDataSetChanged();
-                // Actualizar reproductor con la primera canción de favoritos
-                currentSongIndex = 0;
-                updatePlayerUI();
-            });
-        }).start();
-    }
-
+    // (Método duplicado eliminado para evitar error de sintaxis)
     private void showError() {
         if (!isAdded() || getActivity() == null) return;
         
@@ -353,298 +461,49 @@ requireActivity().runOnUiThread(() -> {
         });
     }
 
+    // --- Métodos de control de reproducción usando Spotify App Remote ---
     private void playSpotifyUri(String uri) {
-    android.util.Log.d("MusicFragment", "Intentando reproducir URI: " + uri);
-    android.util.Log.d("MusicFragment", "Intentando reproducir URI: " + uri);
-        if (uri == null || uri.isEmpty()) {
-            Toast.makeText(requireContext(), "URI de canción no válido", Toast.LENGTH_SHORT).show();
-            return;
+        if (mSpotifyAppRemote != null && uri != null && !uri.isEmpty()) {
+            mSpotifyAppRemote.getPlayerApi().play(uri);
+        } else {
+            Toast.makeText(requireContext(), "No conectado a Spotify o URI inválida", Toast.LENGTH_SHORT).show();
         }
-        new Thread(() -> {
-            try {
-                AuthManager authManager = new AuthManager(requireContext());
-                String accessToken = authManager.getAccessToken();
-                if (accessToken == null) {
-                    requireActivity().runOnUiThread(() -> Toast.makeText(requireContext(), "No hay sesión de Spotify", Toast.LENGTH_LONG).show());
-                    return;
-                }
-                java.net.URL url = new java.net.URL("https://api.spotify.com/v1/me/player/play");
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("PUT");
-                conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
-                String body = "{\"uris\":[\"" + uri + "\"]}";
-                try (java.io.OutputStream os = conn.getOutputStream()) {
-                    byte[] input = body.getBytes("utf-8");
-                    os.write(input, 0, input.length);
-                }
-                int responseCode = conn.getResponseCode();
-                android.util.Log.d("MusicFragment", "Código de respuesta de Spotify: " + responseCode);
-                String errorMessage = "";
-                if (responseCode != 204 && responseCode != 202) {
-                    try {
-                        java.io.InputStream errorStream = conn.getErrorStream();
-                        if (errorStream != null) {
-                            java.util.Scanner s = new java.util.Scanner(errorStream).useDelimiter("\\A");
-                            errorMessage = s.hasNext() ? s.next() : "";
-                            android.util.Log.e("MusicFragment", "Respuesta de error de Spotify: " + errorMessage);
-                        }
-                    } catch (Exception ex) {
-                        android.util.Log.e("MusicFragment", "Error leyendo el cuerpo de error", ex);
-                    }
-                }
-                final int finalResponseCode = responseCode;
-                final String finalErrorMessage = errorMessage;
-                
-
-requireActivity().runOnUiThread(() -> {
-                    if (finalResponseCode == 204) {
-                        Toast.makeText(requireContext(), "Reproduciendo", Toast.LENGTH_SHORT).show();
-                        isPlaying = true;
-                        updatePlayPauseIcon();
-                    } else if (finalResponseCode == 403 && finalErrorMessage.contains("PREMIUM_REQUIRED")) {
-                        Toast.makeText(requireContext(), "Se requiere Premium para controlar la reproducción. Abriendo en Spotify...", Toast.LENGTH_LONG).show();
-                        try {
-                            Intent intent = new Intent(Intent.ACTION_VIEW);
-                            intent.setData(Uri.parse(uri));
-                            intent.putExtra(Intent.EXTRA_REFERRER, Uri.parse("android-app://" + requireContext().getPackageName()));
-                            startActivity(intent);
-                        } catch (Exception ex) {
-                            Toast.makeText(requireContext(), "No se pudo abrir Spotify", Toast.LENGTH_LONG).show();
-                        }
-                    } else {
-                        Toast.makeText(requireContext(), "No se pudo reproducir", Toast.LENGTH_LONG).show();
-                    }
-                });
-            } catch (Exception e) {
-                requireActivity().runOnUiThread(() -> Toast.makeText(requireContext(), "Error al reproducir: " + e.getMessage(), Toast.LENGTH_LONG).show());
-            }
-        }).start();
     }
+
+    private void pauseSpotify() {
+        if (mSpotifyAppRemote != null) {
+            mSpotifyAppRemote.getPlayerApi().pause();
+        }
+    }
+
+    private void resumeSpotify() {
+        if (mSpotifyAppRemote != null) {
+            mSpotifyAppRemote.getPlayerApi().resume();
+        }
+    }
+
+    private void nextSpotify() {
+        if (mSpotifyAppRemote != null) {
+            mSpotifyAppRemote.getPlayerApi().skipNext();
+        }
+    }
+
+    private void previousSpotify() {
+        if (mSpotifyAppRemote != null) {
+            mSpotifyAppRemote.getPlayerApi().skipPrevious();
+        }
+    }
+
 
     // Callback para saber si la pausa fue exitosa
     private interface PauseCallback { void onResult(boolean success); }
     private void pauseSpotifyWithCallback(PauseCallback callback) {
-        new Thread(() -> {
-            try {
-                AuthManager authManager = new AuthManager(requireContext());
-                String accessToken = authManager.getAccessToken();
-                if (accessToken == null) {
-                    
-
-requireActivity().runOnUiThread(() -> {
-                        Toast.makeText(requireContext(), "No hay sesión de Spotify", Toast.LENGTH_LONG).show();
-                        if (callback != null) callback.onResult(false);
-                    });
-                    return;
-                }
-                java.net.URL url = new java.net.URL("https://api.spotify.com/v1/me/player/pause");
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("PUT");
-                conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-                conn.setRequestProperty("Content-Type", "application/json");
-                int responseCode = conn.getResponseCode();
-                android.util.Log.d("MusicFragment", "Código de respuesta de Spotify: " + responseCode);
-                String errorMessage = "";
-                if (responseCode != 204 && responseCode != 202) {
-                    try {
-                        java.io.InputStream errorStream = conn.getErrorStream();
-                        if (errorStream != null) {
-                            java.util.Scanner s = new java.util.Scanner(errorStream).useDelimiter("\\A");
-                            errorMessage = s.hasNext() ? s.next() : "";
-                            android.util.Log.e("MusicFragment", "Respuesta de error de Spotify: " + errorMessage);
-                        }
-                    } catch (Exception ex) {
-                        android.util.Log.e("MusicFragment", "Error leyendo el cuerpo de error", ex);
-                    }
-                }
-                final int respCode = responseCode;
-                final String errMsg = errorMessage;
-
-
-requireActivity().runOnUiThread(() -> {
-                    if (respCode == 204) {
-                        Toast.makeText(requireContext(), "Pausado", Toast.LENGTH_SHORT).show();
-                        isPlaying = false;
-                        updatePlayPauseIcon();
-                        if (callback != null) callback.onResult(true);
-                    } else {
-                        String msg = "No se pudo pausar";
-                        if (respCode == 403 && errMsg.contains("PREMIUM_REQUIRED")) {
-                            msg = "Spotify Premium requerido para pausar";
-                        } else if (respCode == 404) {
-                            msg = "No hay dispositivo activo para pausar";
-                        }
-                        Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show();
-                        updatePlayPauseIcon();
-                        if (callback != null) callback.onResult(false);
-                    }
-                });
-            } catch (Exception e) {
-                
-
-requireActivity().runOnUiThread(() -> {
-                    Toast.makeText(requireContext(), "Error al pausar: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    updatePlayPauseIcon();
-                    if (callback != null) callback.onResult(false);
-                });
-            }
-        }).start();
+        musicPlayerViewModel.pause();
+        updatePlayPauseIcon();
+        if (callback != null) callback.onResult(true);
     }
+    // Eliminado: método duplicado resumeSpotify() innecesario porque ahora usamos el SDK directamente.
 
-    // Callback para saber si el play fue exitoso
-    private interface ResumeCallback { void onResult(boolean success); }
-    private void resumeSpotifyWithCallback(ResumeCallback callback) {
-        if (lastPlayedUri == null) {
-            Toast.makeText(requireContext(), "No hay canción para reanudar", Toast.LENGTH_SHORT).show();
-            if (callback != null) callback.onResult(false);
-            return;
-        }
-        playSpotifyUriWithCallback(lastPlayedUri, callback);
-    }
-
-    private void pauseSpotify() {
-        new Thread(() -> {
-            try {
-                AuthManager authManager = new AuthManager(requireContext());
-                String accessToken = authManager.getAccessToken();
-                if (accessToken == null) {
-                    requireActivity().runOnUiThread(() -> Toast.makeText(requireContext(), "No hay sesión de Spotify", Toast.LENGTH_LONG).show());
-                    return;
-                }
-                java.net.URL url = new java.net.URL("https://api.spotify.com/v1/me/player/pause");
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("PUT");
-                conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-                conn.setRequestProperty("Content-Type", "application/json");
-                int responseCode = conn.getResponseCode();
-                android.util.Log.d("MusicFragment", "Código de respuesta de Spotify: " + responseCode);
-                String errorMessage = "";
-                if (responseCode != 204 && responseCode != 202) {
-                    try {
-                        java.io.InputStream errorStream = conn.getErrorStream();
-                        if (errorStream != null) {
-                            java.util.Scanner s = new java.util.Scanner(errorStream).useDelimiter("\\A");
-                            errorMessage = s.hasNext() ? s.next() : "";
-                            android.util.Log.e("MusicFragment", "Respuesta de error de Spotify: " + errorMessage);
-                        }
-                    } catch (Exception ex) {
-                        android.util.Log.e("MusicFragment", "Error leyendo el cuerpo de error", ex);
-                    }
-                }
-                final int respCode = responseCode;
-                final String errMsg = errorMessage;
-
-
-requireActivity().runOnUiThread(() -> {
-                    if (respCode == 204) {
-                        Toast.makeText(requireContext(), "Pausado", Toast.LENGTH_SHORT).show();
-                        isPlaying = false;
-                        updatePlayPauseIcon();
-                    } else {
-                        Toast.makeText(requireContext(), "No se pudo pausar", Toast.LENGTH_LONG).show();
-                    }
-                });
-            } catch (Exception e) {
-                requireActivity().runOnUiThread(() -> Toast.makeText(requireContext(), "Error al pausar: " + e.getMessage(), Toast.LENGTH_LONG).show());
-            }
-        }).start();
-    }
-
-    // Versión con callback para play
-    private void playSpotifyUriWithCallback(String uri, ResumeCallback callback) {
-        new Thread(() -> {
-            try {
-                AuthManager authManager = new AuthManager(requireContext());
-                String accessToken = authManager.getAccessToken();
-                if (accessToken == null) {
-                    
-
-requireActivity().runOnUiThread(() -> {
-                        Toast.makeText(requireContext(), "No hay sesión de Spotify", Toast.LENGTH_LONG).show();
-                        if (callback != null) callback.onResult(false);
-                    });
-                    return;
-                }
-                java.net.URL url = new java.net.URL("https://api.spotify.com/v1/me/player/play");
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("PUT");
-                conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
-                String jsonBody = "{\"uris\":[\"" + uri + "\"]}";
-                try (java.io.OutputStream os = conn.getOutputStream()) {
-                    byte[] input = jsonBody.getBytes("utf-8");
-                    os.write(input, 0, input.length);
-                }
-                int responseCode = conn.getResponseCode();
-                android.util.Log.d("MusicFragment", "Código de respuesta de Spotify (play): " + responseCode);
-                String errorMessage = "";
-                if (responseCode != 204 && responseCode != 202) {
-                    try {
-                        java.io.InputStream errorStream = conn.getErrorStream();
-                        if (errorStream != null) {
-                            java.util.Scanner s = new java.util.Scanner(errorStream).useDelimiter("\\A");
-                            errorMessage = s.hasNext() ? s.next() : "";
-                            android.util.Log.e("MusicFragment", "Respuesta de error de Spotify (play): " + errorMessage);
-                        }
-                    } catch (Exception ex) {
-                        android.util.Log.e("MusicFragment", "Error leyendo el cuerpo de error (play)", ex);
-                    }
-                }
-                final int respCode2 = responseCode;
-                final String errMsg2 = errorMessage;
-                
-
-requireActivity().runOnUiThread(() -> {
-                    if (respCode2 == 204 || respCode2 == 202) {
-                        Toast.makeText(requireContext(), "Reproduciendo", Toast.LENGTH_SHORT).show();
-                        isPlaying = true;
-                        updatePlayPauseIcon();
-                        if (callback != null) callback.onResult(true);
-                    } else {
-                        String msg = "No se pudo reproducir";
-                        if (respCode2 == 403 && errMsg2.contains("PREMIUM_REQUIRED")) {
-                            msg = "Spotify Premium requerido para reproducir";
-                        } else if (respCode2 == 404) {
-                            msg = "No hay dispositivo activo para reproducir";
-                        }
-                        Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show();
-                        updatePlayPauseIcon();
-                        if (callback != null) callback.onResult(false);
-                    }
-                });
-            } catch (Exception e) {
-                
-
-requireActivity().runOnUiThread(() -> {
-                    Toast.makeText(requireContext(), "Error al reproducir: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    updatePlayPauseIcon();
-                    if (callback != null) callback.onResult(false);
-                });
-            }
-        }).start();
-    }
-    private void resumeSpotify() {
-        if (lastPlayedUri == null) {
-            Toast.makeText(requireContext(), "No hay canción para reanudar", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        playSpotifyUri(lastPlayedUri);
-    }
-
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        if (btnPlayPause != null) {
-            btnPlayPause.setOnClickListener(v -> {
-                if (isPlaying) {
-                    pauseSpotify();
-                } else {
-                    resumeSpotify();
-                }
-            });
-        }
-    }
 }
+
+

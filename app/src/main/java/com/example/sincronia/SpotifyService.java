@@ -69,9 +69,14 @@ public class SpotifyService {
                     String id = playlistJson.getString("id");
                     String name = playlistJson.getString("name");
                     String imageUrl = null;
-                    org.json.JSONArray images = playlistJson.getJSONArray("images");
-                    if (images.length() > 0) {
-                        imageUrl = images.getJSONObject(0).getString("url");
+                    if (playlistJson.has("images") && !playlistJson.isNull("images")) {
+                        Object imagesObj = playlistJson.get("images");
+                        if (imagesObj instanceof org.json.JSONArray) {
+                            org.json.JSONArray images = (org.json.JSONArray) imagesObj;
+                            if (images.length() > 0) {
+                                imageUrl = images.getJSONObject(0).getString("url");
+                            }
+                        }
                     }
                     playlists.add(new Playlist(id, name, imageUrl));
                 }
@@ -176,6 +181,48 @@ songs.add(new Song(title, artist, duration, -1, coverUrl, uri));
         int min = seconds / 60;
         int sec = seconds % 60;
         return String.format("%02d:%02d", min, sec);
+    }
+
+    // Reproducir una canción por URI (Spotify Web API)
+    public static boolean playTrack(String accessToken, String trackUri) {
+        String endpoint = BASE_URL + "/me/player/play";
+        try {
+            URL url = new URL(endpoint);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("PUT");
+            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            String jsonBody = "{\"uris\":[\"" + trackUri + "\"]}";
+            java.io.OutputStream os = conn.getOutputStream();
+            os.write(jsonBody.getBytes());
+            os.flush();
+            os.close();
+            int responseCode = conn.getResponseCode();
+            if (responseCode == 204) return true;
+            Log.e(TAG, "Error al reproducir canción: code=" + responseCode);
+        } catch (Exception e) {
+            Log.e(TAG, "Excepción en playTrack", e);
+        }
+        return false;
+    }
+
+    // Pausar la reproducción actual
+    public static boolean pause(String accessToken) {
+        String endpoint = BASE_URL + "/me/player/pause";
+        try {
+            URL url = new URL(endpoint);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("PUT");
+            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            conn.setRequestProperty("Content-Type", "application/json");
+            int responseCode = conn.getResponseCode();
+            if (responseCode == 204) return true;
+            Log.e(TAG, "Error al pausar: code=" + responseCode);
+        } catch (Exception e) {
+            Log.e(TAG, "Excepción en pause", e);
+        }
+        return false;
     }
 
     // Obtener información de la canción actualmente en reproducción

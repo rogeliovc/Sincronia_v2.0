@@ -33,8 +33,12 @@ android {
 }
 
 dependencies {
+    // Gson para Spotify App Remote SDK
+    implementation("com.google.code.gson:gson:2.10.1")
     // Spotify Android Auth SDK
     implementation("com.spotify.android:auth:1.2.6")
+    // Spotify App Remote SDK para reproducción
+    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
 
     // Glide para carga de imágenes
     implementation("com.github.bumptech.glide:glide:4.16.0")

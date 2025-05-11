@@ -24,7 +24,7 @@ public class LoginActivity extends AppCompatActivity {
     // LoginActivity: solo flujo OAuth nativo con Spotify
     private static final String CLIENT_ID = "4caddaabcd134c6da47d4f7d1c7877ba";
     private static final String REDIRECT_URI = "sincronia://callback";
-    private static final String SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative streaming user-top-read user-read-recently-played user-read-email";
+    private static final String SCOPES = "user-library-read playlist-read-private app-remote-control streaming user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-collaborative user-top-read user-read-recently-played user-read-email";
     private String codeVerifier;
     private ProgressBar progressBar;
     private Button loginButton;

@@ -17,6 +17,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    // Inicializa AuthManager para acceso global
+    com.example.sincronia.AuthManager.init(getApplicationContext());
         // Verificación de sesión
         AuthManager authManager = new AuthManager(this);
         boolean valid = authManager.isTokenValid();
@@ -30,7 +33,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
