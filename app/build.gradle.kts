@@ -33,6 +33,8 @@ android {
 }
 
 dependencies {
+    // Custom Tabs para OAuth PKCE
+    implementation("androidx.browser:browser:1.7.0")
     // Gson para Spotify App Remote SDK
     implementation("com.google.code.gson:gson:2.10.1")
     // Spotify Android Auth SDK

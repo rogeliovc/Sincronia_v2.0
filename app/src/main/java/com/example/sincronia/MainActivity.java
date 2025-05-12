@@ -13,12 +13,23 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
+// Asegúrate de tener este intent-filter en tu AndroidManifest.xml:
+// <activity android:name=".MainActivity">
+//     <intent-filter>
+//         <action android:name="android.intent.action.VIEW"/>
+//         <category android:name="android.intent.category.DEFAULT"/>
+//         <category android:name="android.intent.category.BROWSABLE"/>
+//         <data android:scheme="sincronia" android:host="callback"/>
+//     </intent-filter>
+// </activity>
+
 public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    // Inicializa AuthManager para acceso global
+        super.onCreate(savedInstanceState);
+        // Inicializa AuthManager para acceso global
+        com.example.sincronia.AuthManager.init(getApplicationContext());
     com.example.sincronia.AuthManager.init(getApplicationContext());
         // Verificación de sesión
         AuthManager authManager = new AuthManager(this);

@@ -17,6 +17,13 @@ public class SpotifyService {
 
     // Obtener perfil del usuario
     public static JSONObject getUserProfile(String accessToken) {
+        // Manejo automático de token
+        AuthManager auth = AuthManager.getInstance();
+        if (!auth.isTokenValid()) {
+            boolean refreshed = auth.refreshAccessToken();
+            if (!refreshed) return null;
+            accessToken = auth.getAccessToken();
+        }
         String endpoint = BASE_URL + "/me";
         try {
             URL url = new URL(endpoint);
@@ -45,6 +52,13 @@ public class SpotifyService {
 
     // Obtener playlists del usuario
     public static java.util.List<Playlist> getUserPlaylists(String accessToken) {
+        // Manejo automático de token
+        AuthManager auth = AuthManager.getInstance();
+        if (!auth.isTokenValid()) {
+            boolean refreshed = auth.refreshAccessToken();
+            if (!refreshed) return new java.util.ArrayList<>();
+            accessToken = auth.getAccessToken();
+        }
         java.util.List<Playlist> playlists = new java.util.ArrayList<>();
         String endpoint = BASE_URL + "/me/playlists";
         try {
@@ -91,6 +105,13 @@ public class SpotifyService {
 
     // Obtener canciones favoritas (Liked Songs)
     public static java.util.List<Song> getUserFavorites(String accessToken) {
+        // Manejo automático de token
+        AuthManager auth = AuthManager.getInstance();
+        if (!auth.isTokenValid()) {
+            boolean refreshed = auth.refreshAccessToken();
+            if (!refreshed) return new java.util.ArrayList<>();
+            accessToken = auth.getAccessToken();
+        }
         java.util.List<Song> songs = new java.util.ArrayList<>();
         String endpoint = BASE_URL + "/me/tracks";
         try {
@@ -134,6 +155,13 @@ songs.add(new Song(title, artist, duration, -1, coverUrl, uri));
 
     // Obtener canciones reproducidas recientemente
     public static java.util.List<Song> getRecentlyPlayed(String accessToken) {
+        // Manejo automático de token
+        AuthManager auth = AuthManager.getInstance();
+        if (!auth.isTokenValid()) {
+            boolean refreshed = auth.refreshAccessToken();
+            if (!refreshed) return new java.util.ArrayList<>();
+            accessToken = auth.getAccessToken();
+        }
         java.util.List<Song> songs = new java.util.ArrayList<>();
         String endpoint = BASE_URL + "/me/player/recently-played";
         try {
@@ -185,6 +213,13 @@ songs.add(new Song(title, artist, duration, -1, coverUrl, uri));
 
     // Reproducir una canción por URI (Spotify Web API)
     public static boolean playTrack(String accessToken, String trackUri) {
+        // Manejo automático de token
+        AuthManager auth = AuthManager.getInstance();
+        if (!auth.isTokenValid()) {
+            boolean refreshed = auth.refreshAccessToken();
+            if (!refreshed) return false;
+            accessToken = auth.getAccessToken();
+        }
         String endpoint = BASE_URL + "/me/player/play";
         try {
             URL url = new URL(endpoint);
@@ -209,6 +244,13 @@ songs.add(new Song(title, artist, duration, -1, coverUrl, uri));
 
     // Pausar la reproducción actual
     public static boolean pause(String accessToken) {
+        // Manejo automático de token
+        AuthManager auth = AuthManager.getInstance();
+        if (!auth.isTokenValid()) {
+            boolean refreshed = auth.refreshAccessToken();
+            if (!refreshed) return false;
+            accessToken = auth.getAccessToken();
+        }
         String endpoint = BASE_URL + "/me/player/pause";
         try {
             URL url = new URL(endpoint);
@@ -227,6 +269,13 @@ songs.add(new Song(title, artist, duration, -1, coverUrl, uri));
 
     // Obtener información de la canción actualmente en reproducción
     public static JSONObject getCurrentlyPlaying(String accessToken) {
+        // Manejo automático de token
+        AuthManager auth = AuthManager.getInstance();
+        if (!auth.isTokenValid()) {
+            boolean refreshed = auth.refreshAccessToken();
+            if (!refreshed) return null;
+            accessToken = auth.getAccessToken();
+        }
         String endpoint = BASE_URL + "/me/player/currently-playing";
         try {
             URL url = new URL(endpoint);

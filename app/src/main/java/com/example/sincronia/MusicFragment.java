@@ -24,11 +24,30 @@ import android.net.Uri;
 import java.util.ArrayList;
 import java.util.List;
 
+// Spotify SDK imports para autorización
+// --- OAuth PKCE: imports para Custom Tabs y red ---
+import android.net.Uri;
+import androidx.browser.customtabs.CustomTabsIntent;
+import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.util.Base64;
+// ...otros imports necesarios para red y almacenamiento...
+
 public class MusicFragment extends Fragment {
     // --- Spotify App Remote ---
     private static final String CLIENT_ID = "4caddaabcd134c6da47d4f7d1c7877ba"; // Reemplaza con tu Client ID
     private static final String REDIRECT_URI = "sincronia://callback"; // Reemplaza con tu Redirect URI
     private com.spotify.android.appremote.api.SpotifyAppRemote mSpotifyAppRemote;
+    // PKCE OAuth variables
+    private static final String AUTHORIZATION_ENDPOINT = "https://accounts.spotify.com/authorize";
+    private static final String TOKEN_ENDPOINT = "https://accounts.spotify.com/api/token";
+    private static final String[] SCOPES = {"app-remote-control", "user-modify-playback-state", "user-read-playback-state"};
+    private static final int REQUEST_CODE_SPOTIFY_LOGIN = 1337;
+    private String spotifyAccessToken = null;
+    private String codeVerifier = null;
+
+    // Required empty public constructor
+    public MusicFragment() {}
 
     private RecyclerView rvPlaylists, rvFavorites, rvRecent;
     private PlaylistAdapter playlistAdapter;
@@ -93,8 +112,67 @@ public class MusicFragment extends Fragment {
     // Fin de conexión de botones
 
 
-    public MusicFragment() {
-        // Required empty public constructor
+    // Inicia el flujo OAuth PKCE usando Custom Tabs
+    private void launchSpotifyLoginPKCE() {
+        codeVerifier = generateCodeVerifier();
+        String codeChallenge = generateCodeChallenge(codeVerifier);
+        String scopes = String.join(" ", SCOPES);
+        Uri authUri = Uri.parse(AUTHORIZATION_ENDPOINT)
+                .buildUpon()
+                .appendQueryParameter("client_id", CLIENT_ID)
+                .appendQueryParameter("response_type", "code")
+                .appendQueryParameter("redirect_uri", REDIRECT_URI)
+                .appendQueryParameter("code_challenge_method", "S256")
+                .appendQueryParameter("code_challenge", codeChallenge)
+                .appendQueryParameter("scope", scopes)
+                .build();
+        CustomTabsIntent intent = new CustomTabsIntent.Builder().build();
+        intent.launchUrl(requireContext(), authUri);
+    }
+
+    // Genera un code verifier PKCE
+    private String generateCodeVerifier() {
+        byte[] randomBytes = new byte[32];
+        new SecureRandom().nextBytes(randomBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    // Genera un code challenge PKCE
+    private String generateCodeChallenge(String codeVerifier) {
+        try {
+            byte[] bytes = codeVerifier.getBytes("US-ASCII");
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(bytes, 0, bytes.length);
+            byte[] digest = md.digest();
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+        } catch (Exception e) {
+            throw new RuntimeException("Error generando code_challenge", e);
+        }
+    }
+
+    // Debes capturar el intent de redirección en tu Activity (onNewIntent o similar) y extraer el 'code' para intercambiarlo por el access_token.
+    // Luego, llama a un método como 'exchangeCodeForToken(code)' para obtener el token de acceso y refresco.
+    // Guarda el token y úsalo para conectar App Remote y la Web API.
+
+    // Conecta con Spotify App Remote usando el token recibido
+    private void connectToSpotifyRemote() {
+        com.spotify.android.appremote.api.ConnectionParams connectionParams =
+                new com.spotify.android.appremote.api.ConnectionParams.Builder(CLIENT_ID)
+                        .setRedirectUri(REDIRECT_URI)
+                        .showAuthView(true)
+                        .build();
+        com.spotify.android.appremote.api.SpotifyAppRemote.connect(requireContext(), connectionParams,
+                new com.spotify.android.appremote.api.Connector.ConnectionListener() {
+                    @Override
+                    public void onConnected(com.spotify.android.appremote.api.SpotifyAppRemote spotifyAppRemote) {
+                        mSpotifyAppRemote = spotifyAppRemote;
+                        Toast.makeText(requireContext(), "Conectado a Spotify", Toast.LENGTH_SHORT).show();
+                    }
+                    @Override
+                    public void onFailure(Throwable throwable) {
+                        Toast.makeText(requireContext(), "No se pudo conectar a Spotify: " + throwable.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
     }
 
     @Override
@@ -102,55 +180,24 @@ public class MusicFragment extends Fragment {
         super.onStart();
         // Chequeo de instalación de la app oficial de Spotify
         boolean spotifyInstalled = false;
-        String spotifyVersion = "N/A";
         try {
             android.content.pm.PackageManager pm = requireContext().getPackageManager();
             android.content.pm.PackageInfo info = pm.getPackageInfo("com.spotify.music", 0);
             spotifyInstalled = true;
-            spotifyVersion = info.versionName;
+            // Usa AuthManager para obtener y validar el token
+            String token = com.example.sincronia.AuthManager.getGlobalAccessToken();
+            if (token == null || !com.example.sincronia.AuthManager.getInstance().isTokenValid()) {
+                launchSpotifyLoginPKCE();
+                return;
+            }
+            spotifyAccessToken = token;
+            connectToSpotifyRemote();
         } catch (Exception e) {
             spotifyInstalled = false;
         }
-        android.util.Log.d("SpotifyRemote", "¿Spotify instalada?: " + spotifyInstalled + ", versión: " + spotifyVersion);
-        // Log antes de conectar
-        android.util.Log.d("SpotifyRemote", "Intentando conectar con App Remote. CLIENT_ID: " + CLIENT_ID + ", REDIRECT_URI: " + REDIRECT_URI);
-        com.spotify.android.appremote.api.ConnectionParams connectionParams =
-            new com.spotify.android.appremote.api.ConnectionParams.Builder(CLIENT_ID)
-                .setRedirectUri(REDIRECT_URI)
-                .showAuthView(true)
-                .build();
-        android.util.Log.d("SpotifyRemote", "Llamando a SpotifyAppRemote.connect...");
-        com.spotify.android.appremote.api.SpotifyAppRemote.connect(requireContext(), connectionParams,
-            new com.spotify.android.appremote.api.Connector.ConnectionListener() {
-                @Override
-                public void onConnected(com.spotify.android.appremote.api.SpotifyAppRemote spotifyAppRemote) {
-                    mSpotifyAppRemote = spotifyAppRemote;
-                    android.util.Log.i("SpotifyRemote", "¡Conexión a Spotify App Remote exitosa!");
-                    // Puedes actualizar la UI aquí si lo deseas
-                }
-
-                @Override
-                public void onFailure(Throwable throwable) {
-                    StringBuilder msg = new StringBuilder();
-                    msg.append("No se pudo conectar a Spotify.\n\n");
-                    msg.append("1. Asegúrate de tener la app oficial de Spotify instalada y abierta.\n");
-                    msg.append("2. Inicia sesión con la misma cuenta que usaste para autorizar esta app.\n");
-                    msg.append("3. Si el problema persiste, cierra sesión y vuelve a iniciar sesión en ambas apps.\n\n");
-                    msg.append("Mensaje técnico: ");
-                    msg.append(throwable != null ? throwable.getMessage() : "error desconocido");
-                    android.widget.Toast.makeText(requireContext(), msg.toString(), android.widget.Toast.LENGTH_LONG).show();
-                    if (throwable != null) {
-                        android.util.Log.e("SpotifyRemote", msg.toString(), throwable);
-                        // Log completo del stacktrace
-                        java.io.StringWriter sw = new java.io.StringWriter();
-                        java.io.PrintWriter pw = new java.io.PrintWriter(sw);
-                        throwable.printStackTrace(pw);
-                        android.util.Log.e("SpotifyRemote", sw.toString());
-                    } else {
-                        android.util.Log.e("SpotifyRemote", msg.toString());
-                    }
-                }
-            });
+        if (!spotifyInstalled) {
+            Toast.makeText(requireContext(), "Debes instalar la app oficial de Spotify", Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override
