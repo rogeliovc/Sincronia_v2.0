@@ -153,7 +153,15 @@ public class PlayerBottomSheetFragment extends BottomSheetDialogFragment {
         });
 
         btnPrev.setOnClickListener(view -> { if (actionListener != null) actionListener.onPrev(); });
-        btnPlayPause.setOnClickListener(view -> { if (actionListener != null) actionListener.onPlayPause(); });
+        btnPlayPause.setOnClickListener(view -> {
+            // Solo actualiza el estado, la reproducción real la maneja el fragmento principal
+            if (playerStateViewModel.getIsPlaying().getValue() != null && playerStateViewModel.getIsPlaying().getValue()) {
+                playerStateViewModel.setIsPlaying(false);
+            } else {
+                playerStateViewModel.setIsPlaying(true);
+            }
+            if (actionListener != null) actionListener.onPlayPause();
+        });
         btnNext.setOnClickListener(view -> { if (actionListener != null) actionListener.onNext(); });
         btnClose.setOnClickListener(view -> { if (actionListener != null) actionListener.onClose(); });
         v.findViewById(R.id.handleBar).setOnClickListener(view -> {

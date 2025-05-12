@@ -61,6 +61,11 @@ public class MusicPlayerViewModel extends ViewModel {
         playbackPosition.setValue(ms);
     }
 
+    // Permite actualizar el estado isPlaying desde la UI
+    public void setIsPlaying(boolean playing) {
+        isPlaying.setValue(playing);
+    }
+
     // Acciones de reproducción (lógica básica, integración Spotify se hará luego)
     public void playSongFromList(List<Song> songs, int index) {
         setPlaylist(songs);
@@ -73,35 +78,12 @@ public class MusicPlayerViewModel extends ViewModel {
         startPositionTimer();
     }
 
-    public void play() {
-        Song song = currentSong.getValue();
-        if (song == null || song.getUri() == null) {
-            isPlaying.setValue(false);
-            return;
-        }
-        isPlaying.setValue(true);
-        startPositionTimer();
-        // Lanzar reproducción real en un hilo aparte
-        new Thread(() -> {
-            String accessToken = AuthManager.getGlobalAccessToken(); // Debes implementar este método según tu AuthManager
-            if (accessToken != null) {
-                boolean ok = SpotifyService.playTrack(accessToken, song.getUri());
-                // Opcional: puedes actualizar la UI según ok
-            }
-        }).start();
-    }
+    // Eliminada la función play() que usaba la Web API para reproducir. Ahora la reproducción se controla solo por App Remote desde el fragmento.
 
     public void pause() {
         isPlaying.setValue(false);
         stopPositionTimer();
-        // Pausar reproducción real en Spotify
-        new Thread(() -> {
-            String accessToken = AuthManager.getGlobalAccessToken(); // Debes implementar este método según tu AuthManager
-            if (accessToken != null) {
-                boolean ok = SpotifyService.pause(accessToken);
-                // Opcional: puedes actualizar la UI según ok
-            }
-        }).start();
+        // Eliminado: la pausa real se maneja solo vía App Remote desde el fragmento principal.
     }
 
     public void next() {

@@ -211,37 +211,8 @@ songs.add(new Song(title, artist, duration, -1, coverUrl, uri));
         return String.format("%02d:%02d", min, sec);
     }
 
-    // Reproducir una canción por URI (Spotify Web API)
-    public static boolean playTrack(String accessToken, String trackUri) {
-        // Manejo automático de token
-        AuthManager auth = AuthManager.getInstance();
-        if (!auth.isTokenValid()) {
-            boolean refreshed = auth.refreshAccessToken();
-            if (!refreshed) return false;
-            accessToken = auth.getAccessToken();
-        }
-        String endpoint = BASE_URL + "/me/player/play";
-        try {
-            URL url = new URL(endpoint);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("PUT");
-            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
-            String jsonBody = "{\"uris\":[\"" + trackUri + "\"]}";
-            java.io.OutputStream os = conn.getOutputStream();
-            os.write(jsonBody.getBytes());
-            os.flush();
-            os.close();
-            int responseCode = conn.getResponseCode();
-            if (responseCode == 204) return true;
-            Log.e(TAG, "Error al reproducir canción: code=" + responseCode);
-        } catch (Exception e) {
-            Log.e(TAG, "Excepción en playTrack", e);
-        }
-        return false;
-    }
-
+    // [ELIMINADO] Reproducir una canción por URI (Spotify Web API)
+    // Método eliminado completamente para evitar errores de sintaxis.
     // Pausar la reproducción actual
     public static boolean pause(String accessToken) {
         // Manejo automático de token

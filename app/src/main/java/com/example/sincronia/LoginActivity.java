@@ -56,6 +56,7 @@ progressBar.setVisibility(View.GONE);
                 progressBar.setVisibility(View.VISIBLE);
                 // Generar code_verifier y code_challenge (PKCE)
                 codeVerifier = generateCodeVerifier();
+                android.util.Log.d("SpotifyAuth", "Generado code_verifier: " + codeVerifier);
                 // Guardar code_verifier en SharedPreferences
                 getSharedPreferences("auth", MODE_PRIVATE)
                     .edit()
@@ -114,13 +115,19 @@ progressBar.setVisibility(View.GONE);
                 if (code != null) {
                     // Recuperar el code_verifier de SharedPreferences
                     String codeVerifierFromPrefs = getSharedPreferences("auth", MODE_PRIVATE)
-                        .getString("code_verifier", null);
-                    if (codeVerifierFromPrefs != null) {
-                        exchangeCodeForToken(code, codeVerifierFromPrefs);
-                    } else {
-                        Toast.makeText(this, "No se pudo recuperar code_verifier", Toast.LENGTH_LONG).show();
-                    }
+                    .getString("code_verifier", null);
+                android.util.Log.d("SpotifyAuth", "Recuperado code_verifier: " + codeVerifierFromPrefs);
+                if (codeVerifierFromPrefs != null) {
+                    exchangeCodeForToken(code, codeVerifierFromPrefs);
+                    // Borra después de usar
+                    getSharedPreferences("auth", MODE_PRIVATE)
+                        .edit()
+                        .remove("code_verifier")
+                        .apply();
                 } else {
+                    Toast.makeText(this, "No se pudo recuperar code_verifier", Toast.LENGTH_LONG).show();
+                }
+            } else {
                     Toast.makeText(this, "No se recibió código de autorización", Toast.LENGTH_LONG).show();
                 }
             }

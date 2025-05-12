@@ -1,6 +1,7 @@
 package com.example.sincronia;
 
 import com.bumptech.glide.Glide;
+import android.util.Log;
 
 
 import android.os.Bundle;
@@ -81,22 +82,22 @@ public class MusicFragment extends Fragment {
         btnPrev = view.findViewById(R.id.btnPrev);
 
         btnPlayPause.setOnClickListener(v -> {
-            // Puedes alternar entre play/pause según el estado actual
-            if (isPlaying) {
-                pauseSpotify();
-                isPlaying = false;
+        // Alterna entre play/pause según el estado actual
+        if (isPlaying) {
+            pauseSpotify();
+            isPlaying = false;
+        } else {
+            Song song = musicPlayerViewModel.getCurrentSong().getValue();
+            if (song != null && song.getUri() != null) {
+                playSpotifyUri(song.getUri());
+                android.util.Log.d("MusicFragment", "Reproduciendo URI: " + song.getUri());
+                isPlaying = true;
             } else {
-                // Si tienes el URI actual, úsalo aquí
-                Song currentSong = musicPlayerViewModel.getCurrentSong().getValue();
-                if (currentSong != null && currentSong.getUri() != null) {
-                    playSpotifyUri(currentSong.getUri());
-                    isPlaying = true;
-                } else {
-                    Toast.makeText(requireContext(), "No hay canción seleccionada", Toast.LENGTH_SHORT).show();
-                }
+                Toast.makeText(requireContext(), "No hay canción seleccionada", Toast.LENGTH_SHORT).show();
             }
-            updatePlayPauseIcon();
-        });
+        }
+        updatePlayPauseIcon();
+    });
 
         btnNext.setOnClickListener(v -> {
             nextSpotify();
@@ -156,6 +157,7 @@ public class MusicFragment extends Fragment {
 
     // Conecta con Spotify App Remote usando el token recibido
     private void connectToSpotifyRemote() {
+        Log.d("MusicFragment", "Intentando conectar a Spotify App Remote...");
         com.spotify.android.appremote.api.ConnectionParams connectionParams =
                 new com.spotify.android.appremote.api.ConnectionParams.Builder(CLIENT_ID)
                         .setRedirectUri(REDIRECT_URI)
@@ -166,19 +168,31 @@ public class MusicFragment extends Fragment {
                     @Override
                     public void onConnected(com.spotify.android.appremote.api.SpotifyAppRemote spotifyAppRemote) {
                         mSpotifyAppRemote = spotifyAppRemote;
-                        Toast.makeText(requireContext(), "Conectado a Spotify", Toast.LENGTH_SHORT).show();
+                        Log.d("MusicFragment", "Conectado a Spotify App Remote");
                     }
                     @Override
                     public void onFailure(Throwable throwable) {
-                        Toast.makeText(requireContext(), "No se pudo conectar a Spotify: " + throwable.getMessage(), Toast.LENGTH_LONG).show();
+                        mSpotifyAppRemote = null;
+                        Log.e("MusicFragment", "Error al conectar App Remote: " + throwable.getMessage());
                     }
                 });
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        String token = com.example.sincronia.AuthManager.getGlobalAccessToken();
+        if (token != null && com.example.sincronia.AuthManager.getInstance().isTokenValid() && mSpotifyAppRemote == null) {
+            spotifyAccessToken = token;
+            Log.d("MusicFragment", "onResume: reconectando a Spotify App Remote tras login");
+            connectToSpotifyRemote();
+        }
+    }
+
+    @Override
     public void onStart() {
         super.onStart();
-        // Chequeo de instalación de la app oficial de Spotify
+        Log.d("MusicFragment", "onStart: verificando token y conectando a Spotify App Remote");
         boolean spotifyInstalled = false;
         try {
             android.content.pm.PackageManager pm = requireContext().getPackageManager();
@@ -323,7 +337,7 @@ public class MusicFragment extends Fragment {
                 if (isPlaying) {
                     musicPlayerViewModel.pause();
                 } else {
-                    musicPlayerViewModel.play();
+                    musicPlayerViewModel.setIsPlaying(true);
                 }
             });
         }
@@ -374,7 +388,7 @@ public class MusicFragment extends Fragment {
                     musicPlayerViewModel.pause();
                     playerSheet.setPlaying(false);
                 } else {
-                    musicPlayerViewModel.play();
+                    musicPlayerViewModel.setIsPlaying(true);
                     playerSheet.setPlaying(true);
                 }
             }
@@ -510,35 +524,64 @@ requireActivity().runOnUiThread(() -> {
 
     // --- Métodos de control de reproducción usando Spotify App Remote ---
     private void playSpotifyUri(String uri) {
-        if (mSpotifyAppRemote != null && uri != null && !uri.isEmpty()) {
-            mSpotifyAppRemote.getPlayerApi().play(uri);
-        } else {
-            Toast.makeText(requireContext(), "No conectado a Spotify o URI inválida", Toast.LENGTH_SHORT).show();
+        if (mSpotifyAppRemote == null) {
+            Log.e("MusicFragment", "App Remote NO conectado");
+            Toast.makeText(requireContext(), "No conectado a Spotify", Toast.LENGTH_SHORT).show();
+            return;
         }
+        if (uri == null || uri.isEmpty()) {
+            Log.e("MusicFragment", "URI de canción inválida: " + uri);
+            Toast.makeText(requireContext(), "URI de canción inválida", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Log.d("MusicFragment", "Intentando reproducir URI: " + uri);
+        mSpotifyAppRemote.getPlayerApi().play(uri)
+                .setResultCallback(empty -> Log.d("MusicFragment", "Playback started OK"))
+                .setErrorCallback(error -> Log.e("MusicFragment", "Playback error: " + error.getMessage()));
     }
 
     private void pauseSpotify() {
-        if (mSpotifyAppRemote != null) {
-            mSpotifyAppRemote.getPlayerApi().pause();
+        if (mSpotifyAppRemote == null) {
+            Log.e("MusicFragment", "App Remote NO conectado al pausar");
+            return;
         }
+        Log.d("MusicFragment", "Pausando reproducción");
+        mSpotifyAppRemote.getPlayerApi().pause()
+                .setResultCallback(empty -> Log.d("MusicFragment", "Pause OK"))
+                .setErrorCallback(error -> Log.e("MusicFragment", "Pause error: " + error.getMessage()));
     }
 
     private void resumeSpotify() {
-        if (mSpotifyAppRemote != null) {
-            mSpotifyAppRemote.getPlayerApi().resume();
+        if (mSpotifyAppRemote == null) {
+            Log.e("MusicFragment", "App Remote NO conectado al reanudar");
+            return;
         }
+        Log.d("MusicFragment", "Reanudando reproducción");
+        mSpotifyAppRemote.getPlayerApi().resume()
+                .setResultCallback(empty -> Log.d("MusicFragment", "Resume OK"))
+                .setErrorCallback(error -> Log.e("MusicFragment", "Resume error: " + error.getMessage()));
     }
 
     private void nextSpotify() {
-        if (mSpotifyAppRemote != null) {
-            mSpotifyAppRemote.getPlayerApi().skipNext();
+        if (mSpotifyAppRemote == null) {
+            Log.e("MusicFragment", "App Remote NO conectado al siguiente");
+            return;
         }
+        Log.d("MusicFragment", "Siguiente canción");
+        mSpotifyAppRemote.getPlayerApi().skipNext()
+                .setResultCallback(empty -> Log.d("MusicFragment", "Next OK"))
+                .setErrorCallback(error -> Log.e("MusicFragment", "Next error: " + error.getMessage()));
     }
 
     private void previousSpotify() {
-        if (mSpotifyAppRemote != null) {
-            mSpotifyAppRemote.getPlayerApi().skipPrevious();
+        if (mSpotifyAppRemote == null) {
+            Log.e("MusicFragment", "App Remote NO conectado al anterior");
+            return;
         }
+        Log.d("MusicFragment", "Canción anterior");
+        mSpotifyAppRemote.getPlayerApi().skipPrevious()
+                .setResultCallback(empty -> Log.d("MusicFragment", "Previous OK"))
+                .setErrorCallback(error -> Log.e("MusicFragment", "Previous error: " + error.getMessage()));
     }
 
 

@@ -60,7 +60,8 @@ public class MiniPlayerFragment extends Fragment {
             if (isPlaying != null && isPlaying) {
                 musicPlayerViewModel.pause();
             } else {
-                musicPlayerViewModel.play();
+                // Solo actualiza el estado, la reproducción real la maneja el fragmento principal
+                musicPlayerViewModel.setIsPlaying(true);
             }
         });
         // Al tocar el minireproductor, expande el reproductor completo
